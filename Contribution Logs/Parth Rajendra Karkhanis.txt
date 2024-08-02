@@ -1,0 +1,4 @@
+Week(26/05/2023-02/06/2023)
+
+(1)Did research on Firestore,Aws Cloud Formation,Cloud Run and Terraform.
+(2)Documented the research and learnings in Sprint 1 Report and helped to compile it.

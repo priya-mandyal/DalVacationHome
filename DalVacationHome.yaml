@@ -1,0 +1,1033 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'DalVacationHome Cloud Formation Template'
+
+Resources:
+  # DynamoDB Tables
+  BookingDetailsTable:
+    Type: 'AWS::DynamoDB::Table'
+    Properties:
+      TableName: 'PM-BookingDetails'
+      AttributeDefinitions:
+        - AttributeName: 'booking_reference'
+          AttributeType: 'S'
+      KeySchema:
+        - AttributeName: 'booking_reference'
+          KeyType: 'HASH'
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+
+  RoomsTable:
+    Type: 'AWS::DynamoDB::Table'
+    Properties:
+      TableName: 'PM-Rooms'
+      AttributeDefinitions:
+        - AttributeName: 'roomNumber'
+          AttributeType: 'N'
+      KeySchema:
+        - AttributeName: 'roomNumber'
+          KeyType: 'HASH'
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+
+  # Lambda Functions
+
+  # GetRooms Lambda Function
+  GetRoomsFunction:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      FunctionName: 'GetRoomsFunction'
+      Handler: 'lambda_function.lambda_handler'
+      Runtime: 'python3.8'
+      Code:
+        S3Bucket: 'pm-lambda-functions-zip'
+        S3Key: 'https://pm-lambda-functions-zip.s3.amazonaws.com/getRoom.zip'
+      Role: 'arn:aws:iam::603053634424:role/LabRole'
+      Timeout: 30
+
+  # GetRooms API Gateway Resources
+  GetRoomsApi:
+    Type: 'AWS::ApiGateway::RestApi'
+    Properties:
+      Name: 'GetRoomsApi'
+      Description: 'API Gateway for Rooms Lambda function'
+
+  GetRoomsResource:
+    Type: 'AWS::ApiGateway::Resource'
+    Properties:
+      ParentId: !GetAtt GetRoomsApi.RootResourceId
+      PathPart: 'rooms'
+      RestApiId: !Ref GetRoomsApi
+
+  GetRoomsMethod:
+    Type: 'AWS::ApiGateway::Method'
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: GET
+      ResourceId: !Ref GetRoomsResource
+      RestApiId: !Ref GetRoomsApi
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetRoomsFunction.Arn}/invocations
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: "'*'"
+            method.response.header.Access-Control-Allow-Methods: "'GET'"
+            method.response.header.Access-Control-Allow-Headers: "'Content-Type'"
+        - StatusCode: 500
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: "'*'"
+            method.response.header.Access-Control-Allow-Methods: "'GET'"
+            method.response.header.Access-Control-Allow-Headers: "'Content-Type'"
+
+  GetRoomsOptionsMethod:
+    Type: 'AWS::ApiGateway::Method'
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: OPTIONS
+      ResourceId: !Ref GetRoomsResource
+      RestApiId: !Ref GetRoomsApi
+      Integration:
+        IntegrationHttpMethod: OPTIONS
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: "'*'"
+            method.response.header.Access-Control-Allow-Methods: "'GET, OPTIONS'"
+            method.response.header.Access-Control-Allow-Headers: "'Content-Type'"
+
+  GetRoomsApiDeployment:
+    Type: 'AWS::ApiGateway::Deployment'
+    DependsOn: [GetRoomsMethod, GetRoomsOptionsMethod]
+    Properties:
+      RestApiId: !Ref GetRoomsApi
+      StageName: 'prod'
+
+  GetRoomsLambdaApiGatewayInvoke:
+    Type: 'AWS::Lambda::Permission'
+    Properties:
+      Action: 'lambda:InvokeFunction'
+      FunctionName: !Ref GetRoomsFunction
+      Principal: 'apigateway.amazonaws.com'
+
+# Get Bookings by username
+
+  GetBookingsByUsernameFunction:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      FunctionName: 'GetBookingsByUsernameFunction'
+      Handler: 'lambda_function.lambda_handler'
+      Runtime: 'python3.8'
+      Code:
+        S3Bucket: 'pm-lambda-functions-zip'
+        S3Key: 'https://pm-lambda-functions-zip.s3.amazonaws.com/getBookingsByUsername.zip'
+      Role: 'arn:aws:iam::603053634424:role/LabRole'
+      Timeout: 30
+
+  # API Gateway Resources
+  GetBookingsByUsernameApi:
+    Type: 'AWS::ApiGateway::RestApi'
+    Properties:
+      Name: 'GetBookingsByUsernameApi'
+      Description: 'API Gateway for GetBookingsByUsername Lambda function'
+
+  GetBookingsByUsernameResource:
+    Type: 'AWS::ApiGateway::Resource'
+    Properties:
+      ParentId: !GetAtt GetBookingsByUsernameApi.RootResourceId
+      PathPart: 'bookings'
+      RestApiId: !Ref GetBookingsByUsernameApi
+
+  GetBookingsByUsernameMethod:
+    Type: 'AWS::ApiGateway::Method'
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: POST
+      ResourceId: !Ref GetBookingsByUsernameResource
+      RestApiId: !Ref GetBookingsByUsernameApi
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetBookingsByUsernameFunction.Arn}/invocations
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: "'*'"
+            method.response.header.Access-Control-Allow-Methods: "'POST'"
+            method.response.header.Access-Control-Allow-Headers: "'Content-Type'"
+        - StatusCode: 400
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: "'*'"
+            method.response.header.Access-Control-Allow-Methods: "'POST'"
+            method.response.header.Access-Control-Allow-Headers: "'Content-Type'"
+        - StatusCode: 404
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: "'*'"
+            method.response.header.Access-Control-Allow-Methods: "'POST'"
+            method.response.header.Access-Control-Allow-Headers: "'Content-Type'"
+
+  GetBookingsByUsernameOptionsMethod:
+    Type: 'AWS::ApiGateway::Method'
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: OPTIONS
+      ResourceId: !Ref GetBookingsByUsernameResource
+      RestApiId: !Ref GetBookingsByUsernameApi
+      Integration:
+        IntegrationHttpMethod: OPTIONS
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: "'*'"
+            method.response.header.Access-Control-Allow-Methods: "'POST, OPTIONS'"
+            method.response.header.Access-Control-Allow-Headers: "'Content-Type'"
+
+  GetBookingsByUsernamEApiDeployment:
+    Type: 'AWS::ApiGateway::Deployment'
+    DependsOn: [GetBookingsByUsernameMethod, GetBookingsByUsernameOptionsMethod]
+    Properties:
+      RestApiId: !Ref GetBookingsByUsernameApi
+      StageName: 'prod'
+
+  GetBookingsByUsernameLambdaApiGatewayInvoke:
+    Type: 'AWS::Lambda::Permission'
+    Properties:
+      Action: 'lambda:InvokeFunction'
+      FunctionName: !Ref GetBookingsByUsernameFunction
+      Principal: 'apigateway.amazonaws.com'
+
+# Get Room Lambda function
+
+  GetRoomFunction:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      FunctionName: 'GetRoomFunction'
+      Handler: 'lambda_function.lambda_handler'
+      Runtime: 'python3.8'
+      Code:
+        S3Bucket: 'pm-lambda-functions-zip'
+        S3Key: 'https://pm-lambda-functions-zip.s3.amazonaws.com/getRoom.zip'
+      Role: 'arn:aws:iam::603053634424:role/LabRole'
+      Timeout: 30
+
+  # API Gateway Resources
+  GetRoomApi:
+    Type: 'AWS::ApiGateway::RestApi'
+    Properties:
+      Name: 'GetRoomApi'
+      Description: 'API Gateway for GetRoom Lambda function'
+
+  GetRoomResource:
+    Type: 'AWS::ApiGateway::Resource'
+    Properties:
+      ParentId: !GetAtt GetRoomApi.RootResourceId
+      PathPart: 'room'
+      RestApiId: !Ref GetRoomApi
+
+  GetRoomMethod:
+    Type: 'AWS::ApiGateway::Method'
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: GET
+      ResourceId: !Ref GetRoomResource
+      RestApiId: !Ref GetRoomApi
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetRoomFunction.Arn}/invocations
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: "'*'"
+            method.response.header.Access-Control-Allow-Methods: "'GET'"
+            method.response.header.Access-Control-Allow-Headers: "'Content-Type'"
+        - StatusCode: 400
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: "'*'"
+            method.response.header.Access-Control-Allow-Methods: "'GET'"
+            method.response.header.Access-Control-Allow-Headers: "'Content-Type'"
+
+  GetRoomByReferenceFunction:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      FunctionName: 'GetRoomByReferenceFunction'
+      Handler: 'lambda_function.lambda_handler'
+      Runtime: 'python3.8'
+      Code:
+        S3Bucket: 'pm-lambda-functions-zip'
+        S3Key: 'https://pm-lambda-functions-zip.s3.amazonaws.com/getRoomByReference.zip'
+      Role: 'arn:aws:iam::603053634424:role/LabRole'
+      Timeout: 30
+
+  # API Gateway Resources
+  GetRoomByReferenceApi:
+    Type: 'AWS::ApiGateway::RestApi'
+    Properties:
+      Name: 'GetRoomByReferenceApi'
+      Description: 'API Gateway for GetRoomByReference Lambda function'
+
+  GetRoomByReferenceResource:
+    Type: 'AWS::ApiGateway::Resource'
+    Properties:
+      ParentId: !GetAtt GetRoomByReferenceApi.RootResourceId
+      PathPart: 'getbooking'
+      RestApiId: !Ref GetRoomByReferenceApi
+
+  GetRoomByReferenceMethod:
+    Type: 'AWS::ApiGateway::Method'
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: GET
+      ResourceId: !Ref GetRoomByReferenceResource
+      RestApiId: !Ref GetRoomByReferenceApi
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetRoomByReferenceFunction.Arn}/invocations
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: "'*'"
+            method.response.header.Access-Control-Allow-Methods: "'GET'"
+            method.response.header.Access-Control-Allow-Headers: "'Content-Type'"
+        - StatusCode: 400
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: "'*'"
+            method.response.header.Access-Control-Allow-Methods: "'GET'"
+            method.response.header.Access-Control-Allow-Headers: "'Content-Type'"
+        - StatusCode: 404
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: "'*'"
+            method.response.header.Access-Control-Allow-Methods: "'GET'"
+            method.response.header.Access-Control-Allow-Headers: "'Content-Type'"
+        - StatusCode: 500
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: "'*'"
+            method.response.header.Access-Control-Allow-Methods: "'GET'"
+            method.response.header.Access-Control-Allow-Headers: "'Content-Type'"
+
+  GetRoomByReferenceOptionsMethod:
+    Type: 'AWS::ApiGateway::Method'
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: OPTIONS
+      ResourceId: !Ref GetRoomByReferenceResource
+      RestApiId: !Ref GetRoomByReferenceApi
+      Integration:
+        IntegrationHttpMethod: OPTIONS
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: "'*'"
+            method.response.header.Access-Control-Allow-Methods: "'GET, OPTIONS'"
+            method.response.header.Access-Control-Allow-Headers: "'Content-Type'"
+
+  GetRoomByReferenceApiDeployment:
+    Type: 'AWS::ApiGateway::Deployment'
+    DependsOn: [GetRoomByReferenceMethod, GetRoomByReferenceOptionsMethod]
+    Properties:
+      RestApiId: !Ref GetRoomByReferenceApi
+      StageName: 'prod'
+
+  GetRoomByReferenceLambdaApiGatewayInvoke:
+    Type: 'AWS::Lambda::Permission'
+    Properties:
+      Action: 'lambda:InvokeFunction'
+      FunctionName: !Ref GetRoomByReferenceFunction
+      Principal: 'apigateway.amazonaws.com'
+
+# delete room lambda function
+
+  DeleteRoomFunction: 
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      FunctionName: 'DeleteRoomFunction'
+      Handler: 'lambda_function.lambda_handler'
+      Runtime: 'python3.8'
+      Code:
+        S3Bucket: 'pm-lambda-functions-zip'
+        S3Key: 'https://pm-lambda-functions-zip.s3.amazonaws.com/deleteRoom.zip'
+      Role: 'arn:aws:iam::603053634424:role/LabRole'
+      Timeout: 30
+
+  # API Gateway Resources
+  DeleteRoomApi:
+    Type: 'AWS::ApiGateway::RestApi'
+    Properties:
+      Name: 'DeleteRoomApi'
+      Description: 'API Gateway for DeleteRoom Lambda function'
+
+  DeleteRoomResource:
+    Type: 'AWS::ApiGateway::Resource'
+    Properties:
+      ParentId: !GetAtt DeleteRoomApi.RootResourceId
+      PathPart: 'delete'
+      RestApiId: !Ref DeleteRoomApi
+
+  DeleteRoomMethod:
+    Type: 'AWS::ApiGateway::Method'
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: DELETE
+      ResourceId: !Ref DeleteRoomResource
+      RestApiId: !Ref DeleteRoomApi
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${DeleteRoomFunction.Arn}/invocations
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: "'*'"
+            method.response.header.Access-Control-Allow-Methods: "'DELETE, OPTIONS'"
+            method.response.header.Access-Control-Allow-Headers: "'Content-Type'"
+        - StatusCode: 500
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: "'*'"
+            method.response.header.Access-Control-Allow-Methods: "'DELETE, OPTIONS'"
+            method.response.header.Access-Control-Allow-Headers: "'Content-Type'"
+
+  DeleteRoomOptionsMethod:
+    Type: 'AWS::ApiGateway::Method'
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: OPTIONS
+      ResourceId: !Ref DeleteRoomResource
+      RestApiId: !Ref DeleteRoomApi
+      Integration:
+        IntegrationHttpMethod: OPTIONS
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: "'*'"
+            method.response.header.Access-Control-Allow-Methods: "'DELETE, OPTIONS'"
+            method.response.header.Access-Control-Allow-Headers: "'Content-Type'"
+
+  DeleteRoomApiDeployment:
+    Type: 'AWS::ApiGateway::Deployment'
+    DependsOn: [DeleteRoomMethod, DeleteRoomOptionsMethod]
+    Properties:
+      RestApiId: !Ref DeleteRoomApi
+      StageName: 'prod'
+
+  DeleteRoomLambdaApiGatewayInvoke:
+    Type: 'AWS::Lambda::Permission'
+    Properties:
+      Action: 'lambda:InvokeFunction'
+      FunctionName: !Ref DeleteRoomFunction
+      Principal: 'apigateway.amazonaws.com'
+
+# User Registration
+
+  # User Registration Lambda Function
+  UserRegistrationFunction:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      FunctionName: 'UserRegistrationFunction'
+      Handler: 'lambda_function.lambda_handler'
+      Runtime: 'python3.8'
+      Code:
+        S3Bucket: 'pm-lambda-functions-zip'
+        S3Key: 'https://pm-lambda-functions-zip.s3.amazonaws.com/userRegisteration-67a9a7db-327f-4e9f-9cc4-7e56fe1b40b6.zip'
+      Role: 'arn:aws:iam::603053634424:role/LabRole'
+      Timeout: 30
+
+  # User Registration API Gateway Resources
+  UserRegistrationApi:
+    Type: 'AWS::ApiGateway::RestApi'
+    Properties:
+      Name: 'UserRegistrationApi'
+      Description: 'API Gateway for User Registration Lambda function'
+
+  UserRegistrationResource:
+    Type: 'AWS::ApiGateway::Resource'
+    Properties:
+      ParentId: !GetAtt UserRegistrationApi.RootResourceId
+      PathPart: 'register'
+      RestApiId: !Ref UserRegistrationApi
+
+  UserRegistrationMethod:
+    Type: 'AWS::ApiGateway::Method'
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: POST
+      ResourceId: !Ref UserRegistrationResource
+      RestApiId: !Ref UserRegistrationApi
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UserRegistrationFunction.Arn}/invocations
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: "'*'"
+            method.response.header.Access-Control-Allow-Methods: "'POST'"
+            method.response.header.Access-Control-Allow-Headers: "'Content-Type'"
+        - StatusCode: 500
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: "'*'"
+            method.response.header.Access-Control-Allow-Methods: "'POST'"
+            method.response.header.Access-Control-Allow-Headers: "'Content-Type'"
+
+  UserRegistrationOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: OPTIONS
+      ResourceId: !Ref UserRegistrationResource
+      RestApiId: !Ref UserRegistrationApi
+      Integration:
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Methods: "'OPTIONS,POST'"
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        PassthroughBehavior: WHEN_NO_MATCH
+        Type: MOCK
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
+  UserRegistrationApiDeployment:
+    Type: 'AWS::ApiGateway::Deployment'
+    DependsOn: [UserRegistrationMethod, UserRegistrationOptionsMethod]
+    Properties:
+      RestApiId: !Ref UserRegistrationApi
+      StageName: 'prod'
+
+  UserRegistrationLambdaApiGatewayInvoke:
+    Type: 'AWS::Lambda::Permission'
+    Properties:
+      Action: 'lambda:InvokeFunction'
+      FunctionName: !Ref UserRegistrationFunction
+
+
+# Check user exists
+
+  # Check User Exists Lambda Function
+  CheckUserExistsFunction:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      FunctionName: 'CheckUserExistsFunction'
+      Handler: 'lambda_function.lambda_handler'
+      Runtime: 'python3.8'
+      Code:
+        S3Bucket: 'pm-lambda-functions-zip'
+        S3Key: 'https://pm-lambda-functions-zip.s3.amazonaws.com/checkUserExistsInDynamoDB-ab7c979a-5ba2-47a7-8f2b-05a76c98e12c.zip'
+      Role: 'arn:aws:iam::603053634424:role/LabRole'
+      Timeout: 30
+
+  # Check User Exists API Gateway Resources
+  CheckUserExistsApi:
+    Type: 'AWS::ApiGateway::RestApi'
+    Properties:
+      Name: 'CheckUserExistsApi'
+      Description: 'API Gateway for Check User Exists Lambda function'
+
+  CheckUserExistsResource:
+    Type: 'AWS::ApiGateway::Resource'
+    Properties:
+      ParentId: !GetAtt CheckUserExistsApi.RootResourceId
+      PathPart: 'check-user'
+      RestApiId: !Ref CheckUserExistsApi
+
+  CheckUserExistsMethod:
+    Type: 'AWS::ApiGateway::Method'
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: POST
+      ResourceId: !Ref CheckUserExistsResource
+      RestApiId: !Ref CheckUserExistsApi
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CheckUserExistsFunction.Arn}/invocations
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: "'*'"
+            method.response.header.Access-Control-Allow-Methods: "'POST'"
+            method.response.header.Access-Control-Allow-Headers: "'Content-Type'"
+        - StatusCode: 500
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: "'*'"
+            method.response.header.Access-Control-Allow-Methods: "'POST'"
+            method.response.header.Access-Control-Allow-Headers: "'Content-Type'"
+
+  CheckUserExistsOptionsMethod:
+    Type: 'AWS::ApiGateway::Method'
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: OPTIONS
+      ResourceId: !Ref CheckUserExistsResource
+      RestApiId: !Ref CheckUserExistsApi
+      Integration:
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Methods: "'OPTIONS,POST'"
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        PassthroughBehavior: WHEN_NO_MATCH
+        Type: MOCK
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
+  CheckUserExistsApiDeployment:
+    Type: 'AWS::ApiGateway::Deployment'
+    DependsOn: [CheckUserExistsMethod, CheckUserExistsOptionsMethod]
+    Properties:
+      RestApiId: !Ref CheckUserExistsApi
+      StageName: 'prod'
+
+  CheckUserExistsLambdaApiGatewayInvoke:
+    Type: 'AWS::Lambda::Permission'
+    Properties:
+      Action: 'lambda:InvokeFunction'
+      FunctionName: !Ref CheckUserExistsFunction
+      Principal: 'apigateway.amazonaws.com'
+
+# Email Verification
+
+  # Email Verification Lambda Function
+  EmailVerificationFunction:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      FunctionName: 'EmailVerificationFunction'
+      Handler: 'lambda_function.lambda_handler'
+      Runtime: 'python3.8'
+      Code:
+        S3Bucket: 'pm-lambda-functions-zip'
+        S3Key: 'https://pm-lambda-functions-zip.s3.amazonaws.com/emailVerification-f6958722-fbe7-4863-aad4-e3d94375f670.zip'
+      Role: 'arn:aws:iam::603053634424:role/LabRole'
+      Timeout: 30
+
+  # Email Verification API Gateway Resources
+  EmailVerificationApi:
+    Type: 'AWS::ApiGateway::RestApi'
+    Properties:
+      Name: 'EmailVerificationApi'
+      Description: 'API Gateway for Email Verification Lambda function'
+
+  EmailVerificationResource:
+    Type: 'AWS::ApiGateway::Resource'
+    Properties:
+      ParentId: !GetAtt EmailVerificationApi.RootResourceId
+      PathPart: 'email-verification'
+      RestApiId: !Ref EmailVerificationApi
+
+  EmailVerificationMethod:
+    Type: 'AWS::ApiGateway::Method'
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: POST
+      ResourceId: !Ref EmailVerificationResource
+      RestApiId: !Ref EmailVerificationApi
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${EmailVerificationFunction.Arn}/invocations
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: "'*'"
+            method.response.header.Access-Control-Allow-Methods: "'POST'"
+            method.response.header.Access-Control-Allow-Headers: "'Content-Type'"
+        - StatusCode: 500
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: "'*'"
+            method.response.header.Access-Control-Allow-Methods: "'POST'"
+            method.response.header.Access-Control-Allow-Headers: "'Content-Type'"
+
+  EmailVerificationOptionsMethod:
+    Type: 'AWS::ApiGateway::Method'
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: OPTIONS
+      ResourceId: !Ref EmailVerificationResource
+      RestApiId: !Ref EmailVerificationApi
+      Integration:
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Methods: "'OPTIONS,POST'"
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        PassthroughBehavior: WHEN_NO_MATCH
+        Type: MOCK
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
+  EmailVerificationApiDeployment:
+    Type: 'AWS::ApiGateway::Deployment'
+    DependsOn: [EmailVerificationMethod, EmailVerificationOptionsMethod]
+    Properties:
+      RestApiId: !Ref EmailVerificationApi
+      StageName: 'prod'
+
+  EmailVerificationLambdaApiGatewayInvoke:
+    Type: 'AWS::Lambda::Permission'
+    Properties:
+      Action: 'lambda:InvokeFunction'
+      FunctionName: !Ref EmailVerificationFunction
+      Principal: 'apigateway.amazonaws.com'
+
+# Get All Agents
+
+  # GetAllAgents Lambda Function
+  GetAllAgentsFunction:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      FunctionName: 'GetAllAgentsFunction'
+      Handler: 'lambda_function.lambda_handler'
+      Runtime: 'python3.8'
+      Code:
+        S3Bucket: 'pm-lambda-functions-zip'
+        S3Key: 'https://pm-lambda-functions-zip.s3.amazonaws.com/getAllAgents-b4b83904-9282-41fd-9cf5-a9a86a087c07.zip'
+      Role: 'arn:aws:iam::603053634424:role/LabRole'
+      Timeout: 30
+
+  # GetAllAgents API Gateway Resources
+  GetAllAgentsApi:
+    Type: 'AWS::ApiGateway::RestApi'
+    Properties:
+      Name: 'GetAllAgentsApi'
+      Description: 'API Gateway for Get All Agents Lambda function'
+
+  GetAllAgentsResource:
+    Type: 'AWS::ApiGateway::Resource'
+    Properties:
+      ParentId: !GetAtt GetAllAgentsApi.RootResourceId
+      PathPart: 'agents'
+      RestApiId: !Ref GetAllAgentsApi
+
+  GetAllAgentsMethod:
+    Type: 'AWS::ApiGateway::Method'
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: GET
+      ResourceId: !Ref GetAllAgentsResource
+      RestApiId: !Ref GetAllAgentsApi
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetAllAgentsFunction.Arn}/invocations
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: "'*'"
+            method.response.header.Access-Control-Allow-Methods: "'GET'"
+            method.response.header.Access-Control-Allow-Headers: "'Content-Type'"
+        - StatusCode: 500
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: "'*'"
+            method.response.header.Access-Control-Allow-Methods: "'GET'"
+            method.response.header.Access-Control-Allow-Headers: "'Content-Type'"
+
+  GetAllAgentsOptionsMethod:
+    Type: 'AWS::ApiGateway::Method'
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: OPTIONS
+      ResourceId: !Ref GetAllAgentsResource
+      RestApiId: !Ref GetAllAgentsApi
+      Integration:
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Methods: "'OPTIONS,GET'"
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        PassthroughBehavior: WHEN_NO_MATCH
+        Type: MOCK
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
+  GetAllAgentsApiDeployment:
+    Type: 'AWS::ApiGateway::Deployment'
+    DependsOn: [GetAllAgentsMethod, GetAllAgentsOptionsMethod]
+    Properties:
+      RestApiId: !Ref GetAllAgentsApi
+      StageName: 'prod'
+
+  GetAllAgentsLambdaApiGatewayInvoke:
+    Type: 'AWS::Lambda::Permission'
+    Properties:
+      Action: 'lambda:InvokeFunction'
+      FunctionName: !Ref GetAllAgentsFunction
+      Principal: 'apigateway.amazonaws.com'
+      
+
+# User login
+  # LoginUser Lambda Function
+  LoginUserFunction:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      FunctionName: 'LoginUserFunction'
+      Handler: 'lambda_function.lambda_handler'
+      Runtime: 'python3.8'
+      Code:
+        S3Bucket: 'pm-lambda-functions-zip'
+        S3Key: 'https://pm-lambda-functions-zip.s3.amazonaws.com/loginUser-e7728985-5786-4160-ab66-039e74784ed9.zip'
+      Role: 'arn:aws:iam::603053634424:role/LabRole'
+      Timeout: 30
+
+  # LoginUser API Gateway
+  LoginUserApi:
+    Type: 'AWS::ApiGateway::RestApi'
+    Properties:
+      Name: 'LoginUserApi'
+      Description: 'API Gateway for Login User Lambda function'
+
+  LoginUserResource:
+    Type: 'AWS::ApiGateway::Resource'
+    Properties:
+      ParentId: !GetAtt LoginUserApi.RootResourceId
+      PathPart: 'login'
+      RestApiId: !Ref LoginUserApi
+
+  LoginUserMethod:
+    Type: 'AWS::ApiGateway::Method'
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: POST
+      ResourceId: !Ref LoginUserResource
+      RestApiId: !Ref LoginUserApi
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LoginUserFunction.Arn}/invocations
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: "'*'"
+            method.response.header.Access-Control-Allow-Methods: "'POST'"
+            method.response.header.Access-Control-Allow-Headers: "'Content-Type'"
+        - StatusCode: 500
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: "'*'"
+            method.response.header.Access-Control-Allow-Methods: "'POST'"
+            method.response.header.Access-Control-Allow-Headers: "'Content-Type'"
+
+  LoginUserOptionsMethod:
+    Type: 'AWS::ApiGateway::Method'
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: OPTIONS
+      ResourceId: !Ref LoginUserResource
+      RestApiId: !Ref LoginUserApi
+      Integration:
+        IntegrationHttpMethod: OPTIONS
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: "'*'"
+            method.response.header.Access-Control-Allow-Methods: "'POST, OPTIONS'"
+            method.response.header.Access-Control-Allow-Headers: "'Content-Type'"
+
+  LoginUserApiDeployment:
+    Type: 'AWS::ApiGateway::Deployment'
+    DependsOn: [LoginUserMethod, LoginUserOptionsMethod]
+    Properties:
+      RestApiId: !Ref LoginUserApi
+      StageName: 'prod'
+
+  LoginUserLambdaApiGatewayInvoke:
+    Type: 'AWS::Lambda::Permission'
+    Properties:
+      Action: 'lambda:InvokeFunction'
+      FunctionName: !Ref LoginUserFunction
+      Principal: 'apigateway.amazonaws.com'
+
+# SNSSQS cloud formation
+
+  SNSTopicCreationandsendtoSQSLambdaFunction:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      FunctionName: 'SNSTopicCreationandsendtoSQSLambdaFunction'
+      Handler: 'snstriggers3.SNSTopicCreationandsendtoSQS.lambda_handler'
+      Runtime: 'python3.12'
+      Code:
+        S3Bucket: 'notificationsnsbucket'
+        S3Key: 'snstriggers3.zip'
+      Role: 'arn:aws:iam::603053634424:role/LabRole'
+      Timeout: 30
+
+  notificationGateway:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: notificationGateway
+
+  notificationGatewayResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt notificationGateway.RootResourceId
+      PathPart: notification
+      RestApiId: !Ref notificationGateway
+
+  notificationMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref notificationGateway
+      ResourceId: !Ref notificationGatewayResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SNSTopicCreationandsendtoSQSLambdaFunction.Arn}/invocations'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: Empty
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: "'*'"
+
+  notificationMethodOptions:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref notificationGateway
+      ResourceId: !Ref notificationGatewayResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: "{ \"statusCode\": 200 }"
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+            ResponseTemplates:
+              application/json: ""
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: Empty
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Headers: true
+
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt SNSTopicCreationandsendtoSQSLambdaFunction.Arn
+      Action: "lambda:InvokeFunction"
+      Principal: "apigateway.amazonaws.com"
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${notificationGateway}/notification/*"
+
+  notificationGatewayDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn: 
+      - notificationMethod
+      - notificationMethodOptions
+    Properties:
+      RestApiId: !Ref notificationGateway
+      StageName: notification
+
+  SQSTriggertoSendSNSNotificationLambdaFunction: 
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      FunctionName: 'SQSTriggertoSendSNSNotificationLambdaFunction'
+      Handler: 'snstriggers3.SQSTriggertoSendSNSNotification.lambda_handler'
+      Runtime: 'python3.11'
+      Code:
+        S3Bucket: 'notificationsnsbucket'
+        S3Key: 'sqstriggers3.zip'
+      Role: 'arn:aws:iam::603053634424:role/LabRole'
+      Timeout: 30
+
+  notificationqueue:
+    Type: "AWS::SQS::Queue"
+    Properties:
+      QueueName: notificationqueue
+
+  notificationqueueEventSourceMapping:
+    Type: "AWS::Lambda::EventSourceMapping"
+    Properties:
+      BatchSize: 10
+      EventSourceArn: !GetAtt notificationqueue.Arn
+      FunctionName: !Ref SQSTriggertoSendSNSNotificationLambdaFunction
+
+  CognitoUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: MyUserPool
+      AutoVerifiedAttributes:
+        - email
+      Schema:
+        - AttributeDataType: String
+          DeveloperOnlyAttribute: false
+          Mutable: true
+          Name: email
+          Required: true
+        - AttributeDataType: Boolean
+          DeveloperOnlyAttribute: false
+          Mutable: true
+          Name: custom:isAgent
+          Required: false
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireUppercase: true
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: true
+
+  CognitoUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: MyUserPoolClient
+      UserPoolId:
+        Ref: CognitoUserPool
+      ExplicitAuthFlows:
+        - ADMIN_NO_SRP_AUTH
+        - CUSTOM_AUTH_FLOW_ONLY
+        - USER_PASSWORD_AUTH
+      GenerateSecret: false
+ 

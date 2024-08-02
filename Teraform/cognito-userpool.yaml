@@ -1,0 +1,51 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CloudFormation template to create an AWS Cognito User Pool and User Pool Client
+
+Resources:
+  CognitoUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: MyUserPool
+      AutoVerifiedAttributes:
+        - email
+      Schema:
+        - AttributeDataType: String
+          DeveloperOnlyAttribute: false
+          Mutable: true
+          Name: email
+          Required: true
+        - AttributeDataType: Boolean
+          DeveloperOnlyAttribute: false
+          Mutable: true
+          Name: custom:isAgent
+          Required: false
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireUppercase: true
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: true
+
+  CognitoUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: MyUserPoolClient
+      UserPoolId:
+        Ref: CognitoUserPool
+      ExplicitAuthFlows:
+        - ADMIN_NO_SRP_AUTH
+        - CUSTOM_AUTH_FLOW_ONLY
+        - USER_PASSWORD_AUTH
+      GenerateSecret: false
+
+Outputs:
+  UserPoolId:
+    Description: The ID of the Cognito User Pool
+    Value:
+      Ref: CognitoUserPool
+
+  UserPoolClientId:
+    Description: The ID of the Cognito User Pool Client
+    Value:
+      Ref: CognitoUserPoolClient
